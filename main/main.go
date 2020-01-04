@@ -458,6 +458,7 @@ func setupRouter() *gin.Engine {
 		IdentityKey: identityKey,
 		Timeout:     time.Hour * 10,
 		MaxRefresh:  time.Hour * 1000,
+		SendCookie:  true,
 		PayloadFunc: func(data interface{}) jwt.MapClaims {
 			if v, ok := data.(*User); ok {
 				return jwt.MapClaims{

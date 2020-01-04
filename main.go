@@ -18,5 +18,5 @@ package main
 import "github.com/cijianapp/server/cmd"
 
 func main() {
-	cmd.Execute()
+  cmd.Execute()
 }

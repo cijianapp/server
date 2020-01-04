@@ -2,8 +2,10 @@ package app
 
 import (
 	"github.com/appleboy/gin-jwt/v2"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
+	"fmt"
 	"log"
 	"time"
 )
@@ -17,6 +19,17 @@ type user struct {
 
 func setupRouter() *gin.Engine {
 	r := gin.Default()
+
+	// r.Use(cors.Default())
+
+	r.Use(cors.New(cors.Config{
+		AllowOrigins: []string{"http://cijian.net:3000", "http://localhost:3000"},
+		AllowMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
+		AllowHeaders: []string{"Origin", "Content-Length", "Content-Type", "Authorization"},
+		// AllowCredentials: true,
+		MaxAge: 12 * time.Hour,
+		// AllowAllOrigins:  true,
+	}))
 
 	authMiddleware, err := jwt.New(&jwt.GinJWTMiddleware{
 		Key:         []byte("FE880BE1D7558D62B1DFDAE3E7D4F82ED9E987FA12D9195A18312741A1F87858"),
@@ -32,15 +45,38 @@ func setupRouter() *gin.Engine {
 			return jwt.MapClaims{}
 		},
 		Authenticator: authCallback,
+		// SendCookie:     true,
+		// CookieHTTPOnly: true,
+		// SecureCookie:   true,
 	})
-
-	r.POST("/auth/login", authMiddleware.LoginHandler)
 
 	if err != nil {
 		log.Fatal("JWT Error:" + err.Error())
 	}
 
+	r.POST("auth/verify", authVerify)
+
+	r.POST("auth/login", authMiddleware.LoginHandler)
+
+	r.POST("auth/register", authMiddleware.LoginHandler)
+
+	api := r.Group("/api")
+
+	api.Use(authMiddleware.MiddlewareFunc())
+	{
+		api.GET("/info", userInfo)
+		api.POST("/guild", newGuild)
+		api.POST("/post", newPost)
+		api.GET("/posts", getPosts)
+	}
+
 	return r
+}
+
+func handleError(err error) {
+	if err != nil {
+		fmt.Println("Error:", err)
+	}
 }
 
 // Run is the root fucntion to excute
