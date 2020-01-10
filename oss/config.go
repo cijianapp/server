@@ -13,6 +13,9 @@ func handleError(err error) {
 
 var bucket = ossConfig()
 
+// OssURL is the base url of oss
+const OssURL = "http://cijiantest01.oss-us-east-1.aliyuncs.com/"
+
 func ossConfig() *oss.Bucket {
 	endpoint := "http://oss-us-east-1.aliyuncs.com"
 	accessKeyID := "LTAI4FhCjDTkQYUShUdgKZgT"

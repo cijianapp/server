@@ -3,18 +3,21 @@ package app
 import (
 	"context"
 	"github.com/appleboy/gin-jwt/v2"
+	"github.com/cijianapp/server/oss"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
+	"fmt"
 	"log"
+	"strings"
 	"time"
 )
 
 type postPost struct {
-	Title   string      `form:"title" json:"title" `
-	Guild   string      `form:"guild" json:"guild" binding:"required"`
-	Content interface{} `form:"content" json:"content" binding:"required"`
+	Title   string        `form:"title" json:"title" `
+	Guild   string        `form:"guild" json:"guild" binding:"required"`
+	Content []interface{} `form:"content" json:"content" binding:"required"`
 }
 
 type post struct {
@@ -30,8 +33,12 @@ type post struct {
 	Vote        int64       `form:"vote" json:"vote"`
 }
 
-type getPost struct {
+type getPostsType struct {
 	Guild string `form:"guild" json:"guild" binding:"required"`
+}
+
+type getPostType struct {
+	Post string `form:"post" json:"post" binding:"required"`
 }
 
 func newPost(c *gin.Context) {
@@ -48,7 +55,27 @@ func newPost(c *gin.Context) {
 	var postVals post
 	postVals.Title = postPostVals.Title
 	postVals.Guild = postPostVals.Guild
-	postVals.Content = postPostVals.Content
+
+	var content []interface{}
+
+	// change base64 to url
+	for _, v := range postPostVals.Content {
+		element, ok := v.(map[string]interface{})
+		if ok {
+			if element["type"] == "image" {
+				str := fmt.Sprintf("%v", element["url"])
+
+				if strings.Contains(str, "base64") {
+					_, ossImage := oss.PutObject(str)
+					element["url"] = oss.OssURL + ossImage
+				}
+			}
+		}
+
+		content = append(content, element)
+
+	}
+	postVals.Content = content
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -89,11 +116,34 @@ func newPost(c *gin.Context) {
 	c.JSON(200, gin.H{"code": 200, "post": postRes})
 }
 
-func getPosts(c *gin.Context) {
-
-	var getPostVals getPost
+func getPost(c *gin.Context) {
+	var getPostVals getPostType
 
 	if err := c.ShouldBind(&getPostVals); err != nil {
+		c.JSON(401, gin.H{"error": "cannot get the post"})
+		return
+	}
+
+	postCollection := connectDB("post")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	postID, err := primitive.ObjectIDFromHex(getPostVals.Post)
+	handleError(err)
+
+	var result bson.M
+	err = postCollection.FindOne(ctx, bson.M{"_id": postID}).Decode(&result)
+	handleError(err)
+
+	c.JSON(200, result)
+}
+
+func getPosts(c *gin.Context) {
+
+	var getPostsVals getPostsType
+
+	if err := c.ShouldBind(&getPostsVals); err != nil {
 
 		c.JSON(401, gin.H{"error": "cannot get the posts"})
 		return
@@ -104,7 +154,7 @@ func getPosts(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	cur, err := postCollection.Find(ctx, bson.M{"guild": getPostVals.Guild})
+	cur, err := postCollection.Find(ctx, bson.M{"guild": getPostsVals.Guild})
 	handleError(err)
 
 	var results []bson.M

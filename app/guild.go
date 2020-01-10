@@ -5,6 +5,7 @@ import (
 	"github.com/cijianapp/server/oss"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"context"
 	"log"
@@ -15,6 +16,10 @@ type postGuild struct {
 	Name    string `form:"name" json:"name" binding:"required"`
 	Privacy string `form:"privacy" json:"privacy" binding:"required"`
 	Icon    string `form:"icon" json:"icon"`
+}
+
+type joinGuildType struct {
+	Guild string `form:"guild" json:"guild" binding:"required"`
 }
 
 type guild struct {
@@ -72,9 +77,7 @@ func insertGuild(owner interface{}, guildID interface{}) {
 	update := bson.D{bson.E{Key: "$push", Value: bson.D{bson.E{Key: "guilds", Value: guild}}}}
 
 	_, err = userCollection.UpdateOne(context.TODO(), filter, update)
-	if err != nil {
-		log.Fatal(err)
-	}
+	handleError(err)
 }
 
 func newGuild(c *gin.Context) {
@@ -117,4 +120,34 @@ func newGuild(c *gin.Context) {
 	insertGuild(guildVals.Owner, guildRes.InsertedID)
 
 	c.JSON(200, gin.H{"code": 200, "guild": guildRes.InsertedID})
+}
+
+func joinGuild(c *gin.Context) {
+
+	claims := jwt.ExtractClaims(c)
+
+	var joinGuildVals joinGuildType
+
+	if err := c.ShouldBind(&joinGuildVals); err != nil {
+
+		c.JSON(401, gin.H{"error": "cannot join the guild"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	userCollection := connectDB("user")
+
+	var user bson.M
+	err := userCollection.FindOne(ctx, bson.M{"tel": claims[identityKey]}).Decode(&user)
+	handleError(err)
+
+	guildID, err := primitive.ObjectIDFromHex(joinGuildVals.Guild)
+	handleError(err)
+
+	insertGuild(user["_id"], guildID)
+
+	c.JSON(200, gin.H{"code": 200, "guild": guildID})
+
 }

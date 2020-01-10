@@ -22,10 +22,10 @@ func PutObject(icon string) (bool, string) {
 }
 
 //PutObjectFromFile upload all files to aliyun oss
-func PutObjectFromFile() {
+func PutObjectFromFile(fileID string, fileType string, fileName string) {
 	bucket := ossConfig()
-	objectName := "image/26.png"
-	localFileName := "tmp/1VbAaSfMh2c2U5jQrMrSGeJOHJJ.png"
+	objectName := fileType + "/" + fileID + "/" + fileName
+	localFileName := "tmp/" + fileID + ".mp4"
 	err := bucket.PutObjectFromFile(objectName, localFileName)
 	if err != nil {
 		handleError(err)

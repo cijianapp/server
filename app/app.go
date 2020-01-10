@@ -66,8 +66,19 @@ func setupRouter() *gin.Engine {
 	{
 		api.GET("/info", userInfo)
 		api.POST("/guild", newGuild)
+		api.POST("/join", joinGuild)
 		api.POST("/post", newPost)
 		api.GET("/posts", getPosts)
+		api.GET("/post", getPost)
+		api.POST("/upload", newUpload)
+
+	}
+
+	upload := r.Group("/upload")
+
+	upload.Use(authMiddleware.MiddlewareFunc())
+	{
+		upload.POST("/image", uploadImage)
 	}
 
 	return r
