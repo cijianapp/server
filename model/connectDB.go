@@ -1,4 +1,4 @@
-package app
+package model
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+//ConnectDB return the db collection
 func connectDB(collectionName string) *mongo.Collection {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

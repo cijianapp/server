@@ -1,4 +1,4 @@
-package app
+package api
 
 import (
 	"context"
@@ -18,7 +18,7 @@ type login struct {
 
 func authCallback(c *gin.Context) (interface{}, error) {
 
-	userCollection := connectDB("user")
+	userCollection := ConnectDB("user")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -82,7 +82,7 @@ func authVerify(c *gin.Context) {
 		return
 	}
 
-	userCollection := connectDB("user")
+	userCollection := ConnectDB("user")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

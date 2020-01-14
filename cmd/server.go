@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/cijianapp/server/app"
+	"github.com/cijianapp/server/api"
 )
 
 // serverCmd represents the server command
@@ -20,7 +20,7 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("server called")
-		app.Run()
+		api.Run()
 
 	},
 }

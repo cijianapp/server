@@ -1,7 +1,8 @@
-package app
+package api
 
 import (
 	"github.com/appleboy/gin-jwt/v2"
+	"github.com/cijianapp/server/model"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
@@ -23,12 +24,12 @@ func setupRouter() *gin.Engine {
 	// r.Use(cors.Default())
 
 	r.Use(cors.New(cors.Config{
-		AllowOrigins: []string{"http://cijian.net:3000", "http://localhost:3000"},
+		// AllowOrigins: []string{"http://cijian.net:3000", "http://localhost:3000"},
 		AllowMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
 		AllowHeaders: []string{"Origin", "Content-Length", "Content-Type", "Authorization"},
 		// AllowCredentials: true,
-		MaxAge: 12 * time.Hour,
-		// AllowAllOrigins:  true,
+		MaxAge:          12 * time.Hour,
+		AllowAllOrigins: true,
 	}))
 
 	authMiddleware, err := jwt.New(&jwt.GinJWTMiddleware{
@@ -59,6 +60,13 @@ func setupRouter() *gin.Engine {
 	r.POST("auth/login", authMiddleware.LoginHandler)
 
 	r.POST("auth/register", authMiddleware.LoginHandler)
+
+	hub := model.NewHub()
+	go hub.Run()
+
+	r.GET("/ws", func(c *gin.Context) {
+		connectWebSocket(c, hub)
+	})
 
 	api := r.Group("/api")
 

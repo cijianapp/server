@@ -1,4 +1,4 @@
-package app
+package api
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 func userInfo(c *gin.Context) {
 	claims := jwt.ExtractClaims(c)
 
-	userCollection := connectDB("user")
+	userCollection := ConnectDB("user")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

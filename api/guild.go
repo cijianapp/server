@@ -1,4 +1,4 @@
-package app
+package api
 
 import (
 	"github.com/appleboy/gin-jwt/v2"
@@ -31,7 +31,7 @@ type guild struct {
 }
 
 func generateGuild(name string, owner interface{}) interface{} {
-	guildsCollection := connectDB("guilds")
+	guildsCollection := ConnectDB("guilds")
 
 	var guildVals guild
 
@@ -61,23 +61,38 @@ func generateGuild(name string, owner interface{}) interface{} {
 }
 
 func insertGuild(owner interface{}, guildID interface{}) {
-	userCollection := connectDB("user")
-	guildsCollection := connectDB("guilds")
+	userCollection := ConnectDB("user")
+	guildsCollection := ConnectDB("guilds")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	var guild bson.M
 	err := guildsCollection.FindOne(ctx, bson.M{"_id": guildID}).Decode(&guild)
+	handleError(err)
+
+	filter := bson.M{"_id": owner, "guilds": bson.M{"$elemMatch": bson.M{"_id": guildID}}}
+
+	var user bson.M
+	err = userCollection.FindOne(context.TODO(), filter).Decode(&user)
+
 	if err != nil {
-		log.Fatal(err)
+		filter = bson.M{"_id": owner}
+		update := bson.M{"$push": bson.M{"guilds": guild}}
+
+		_, err = userCollection.UpdateOne(context.TODO(), filter, update)
+		handleError(err)
+
+		filter = bson.M{"_id": owner}
+		err = userCollection.FindOne(context.TODO(), filter).Decode(&user)
+		handleError(err)
+
+		filter = bson.M{"_id": guildID}
+		update = bson.M{"$push": bson.M{"members": bson.M{"_id": user["_id"], "username": user["username"]}}}
+		_, err = guildsCollection.UpdateOne(context.TODO(), filter, update)
+		handleError(err)
 	}
 
-	filter := bson.D{bson.E{Key: "_id", Value: owner}}
-	update := bson.D{bson.E{Key: "$push", Value: bson.D{bson.E{Key: "guilds", Value: guild}}}}
-
-	_, err = userCollection.UpdateOne(context.TODO(), filter, update)
-	handleError(err)
 }
 
 func newGuild(c *gin.Context) {
@@ -102,7 +117,7 @@ func newGuild(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	userCollection := connectDB("user")
+	userCollection := ConnectDB("user")
 
 	var user bson.M
 	err := userCollection.FindOne(ctx, bson.M{"tel": claims[identityKey]}).Decode(&user)
@@ -112,7 +127,7 @@ func newGuild(c *gin.Context) {
 
 	guildVals.Isavatar, guildVals.Avatar = oss.PutObject(postGuildVals.Icon)
 
-	guildsCollection := connectDB("guilds")
+	guildsCollection := ConnectDB("guilds")
 
 	guildRes, err := guildsCollection.InsertOne(ctx, guildVals)
 	handleError(err)
@@ -137,7 +152,7 @@ func joinGuild(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	userCollection := connectDB("user")
+	userCollection := ConnectDB("user")
 
 	var user bson.M
 	err := userCollection.FindOne(ctx, bson.M{"tel": claims[identityKey]}).Decode(&user)

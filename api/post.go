@@ -1,4 +1,4 @@
-package app
+package api
 
 import (
 	"context"
@@ -80,7 +80,7 @@ func newPost(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	userCollection := connectDB("user")
+	userCollection := ConnectDB("user")
 	var user bson.M
 	err := userCollection.FindOne(ctx, bson.M{"tel": claims[identityKey]}).Decode(&user)
 	handleError(err)
@@ -88,7 +88,7 @@ func newPost(c *gin.Context) {
 	postVals.OwnerName = user["username"]
 	postVals.OwnerAvatar = ""
 
-	guildsCollection := connectDB("guilds")
+	guildsCollection := ConnectDB("guilds")
 	var guild bson.M
 
 	guildID, err := primitive.ObjectIDFromHex(postVals.Guild)
@@ -108,7 +108,7 @@ func newPost(c *gin.Context) {
 	postVals.Time = time.Now()
 	postVals.Vote = 0
 
-	postCollection := connectDB("post")
+	postCollection := ConnectDB("post")
 
 	postRes, err := postCollection.InsertOne(ctx, postVals)
 	handleError(err)
@@ -124,7 +124,7 @@ func getPost(c *gin.Context) {
 		return
 	}
 
-	postCollection := connectDB("post")
+	postCollection := ConnectDB("post")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -149,7 +149,7 @@ func getPosts(c *gin.Context) {
 		return
 	}
 
-	postCollection := connectDB("post")
+	postCollection := ConnectDB("post")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

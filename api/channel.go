@@ -1,4 +1,4 @@
-package app
+package api
 
 import (
 	"go.mongodb.org/mongo-driver/bson"
@@ -15,7 +15,7 @@ type channel struct {
 
 //owner should be the ID of guild
 func generateChannel(name string, owner interface{}) interface{} {
-	channelssCollection := connectDB("channels")
+	channelssCollection := ConnectDB("channels")
 
 	var channelVals channel
 
@@ -36,8 +36,8 @@ func generateChannel(name string, owner interface{}) interface{} {
 
 func insertChannel(owner interface{}, ChannelID interface{}) {
 
-	guildCollection := connectDB("guilds")
-	channelssCollection := connectDB("channels")
+	guildCollection := ConnectDB("guilds")
+	channelssCollection := ConnectDB("channels")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
