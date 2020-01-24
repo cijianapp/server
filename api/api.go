@@ -72,6 +72,7 @@ func setupRouter() *gin.Engine {
 
 	api.Use(authMiddleware.MiddlewareFunc())
 	{
+		api.POST("/updateuser", updateUser)
 		api.GET("/info", userInfo)
 		api.POST("/guild", newGuild)
 		api.POST("/join", joinGuild)
@@ -79,7 +80,8 @@ func setupRouter() *gin.Engine {
 		api.GET("/posts", getPosts)
 		api.GET("/post", getPost)
 		api.POST("/upload", newUpload)
-
+		api.POST("/channel", newChannel)
+		api.POST("/vote", vote)
 	}
 
 	upload := r.Group("/upload")

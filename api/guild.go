@@ -8,7 +8,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"context"
-	"log"
+	"errors"
 	"time"
 )
 
@@ -23,78 +23,47 @@ type joinGuildType struct {
 }
 
 type guild struct {
-	Name     string      `form:"name" json:"name"`
-	Isavatar bool        `form:"isavatar" json:"isavatar"`
-	Avatar   string      `form:"avatar" json:"avatar"`
-	Privacy  bool        `form:"privacy" json:"privacy"`
-	Owner    interface{} `form:"owner" json:"owner"`
+	Name        string             `form:"name" json:"name"`
+	Isavatar    bool               `form:"isavatar" json:"isavatar"`
+	Avatar      string             `form:"avatar" json:"avatar"`
+	Privacy     bool               `form:"privacy" json:"privacy"`
+	Owner       interface{}        `form:"owner" json:"owner"`
+	PostChannel primitive.ObjectID `form:"postchannel" json:"postchannel"`
 }
 
-func generateGuild(name string, owner interface{}) interface{} {
-	guildsCollection := ConnectDB("guilds")
-
-	var guildVals guild
-
-	guildVals.Name = name
-
-	guildVals.Owner = owner
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	res, err := guildsCollection.InsertOne(ctx, guildVals)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	guildID := res.InsertedID
-
-	channelID := generateChannel("动态", guildID)
-
-	insertChannel(guildID, channelID)
-
-	channelID = generateChannel("群聊", guildID)
-
-	insertChannel(guildID, channelID)
-
-	return guildID
-}
-
-func insertGuild(owner interface{}, guildID interface{}) {
+// When user generate a guild, this function tell user register this guild
+func insertGuild(owner interface{}, guildID primitive.ObjectID) {
 	userCollection := ConnectDB("user")
-	guildsCollection := ConnectDB("guilds")
+	guildCollection := ConnectDB("guild")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var guild bson.M
-	err := guildsCollection.FindOne(ctx, bson.M{"_id": guildID}).Decode(&guild)
-	handleError(err)
-
-	filter := bson.M{"_id": owner, "guilds": bson.M{"$elemMatch": bson.M{"_id": guildID}}}
+	filter := bson.M{"_id": owner, "guild": bson.M{"$elemMatch": bson.M{"_id": guildID}}}
 
 	var user bson.M
-	err = userCollection.FindOne(context.TODO(), filter).Decode(&user)
+	err := userCollection.FindOne(ctx, filter).Decode(&user)
 
 	if err != nil {
 		filter = bson.M{"_id": owner}
-		update := bson.M{"$push": bson.M{"guilds": guild}}
+		update := bson.M{"$push": bson.M{"guild": guildID}}
 
-		_, err = userCollection.UpdateOne(context.TODO(), filter, update)
+		_, err = userCollection.UpdateOne(ctx, filter, update)
 		handleError(err)
 
 		filter = bson.M{"_id": owner}
-		err = userCollection.FindOne(context.TODO(), filter).Decode(&user)
+		err = userCollection.FindOne(ctx, filter).Decode(&user)
 		handleError(err)
 
 		filter = bson.M{"_id": guildID}
 		update = bson.M{"$push": bson.M{"members": bson.M{"_id": user["_id"], "username": user["username"]}}}
-		_, err = guildsCollection.UpdateOne(context.TODO(), filter, update)
+		_, err = guildCollection.UpdateOne(ctx, filter, update)
 		handleError(err)
 	}
 
 }
 
+// generate a new guild
 func newGuild(c *gin.Context) {
 	claims := jwt.ExtractClaims(c)
 
@@ -125,16 +94,44 @@ func newGuild(c *gin.Context) {
 
 	guildVals.Owner = user["_id"]
 
-	guildVals.Isavatar, guildVals.Avatar = oss.PutObject(postGuildVals.Icon)
+	guildVals.Isavatar, guildVals.Avatar = oss.PutImageResize(postGuildVals.Icon)
 
-	guildsCollection := ConnectDB("guilds")
+	guildCollection := ConnectDB("guild")
 
-	guildRes, err := guildsCollection.InsertOne(ctx, guildVals)
+	guildRes, err := guildCollection.InsertOne(ctx, guildVals)
 	handleError(err)
 
-	insertGuild(guildVals.Owner, guildRes.InsertedID)
+	if guildID, ok := guildRes.InsertedID.(primitive.ObjectID); ok {
+		insertGuild(guildVals.Owner, guildID)
 
-	c.JSON(200, gin.H{"code": 200, "guild": guildRes.InsertedID})
+		channel := generateChannel("post", guildID)
+
+		if channelID, ok := channel.(primitive.ObjectID); ok {
+
+			err = insertChannel(guildID, channelID)
+			if err != nil {
+				c.JSON(401, gin.H{"error": "cannot generate a guild"})
+				return
+			}
+
+			filter := bson.M{"_id": guildID}
+			update := bson.M{"$set": bson.M{"postchannel": channelID}}
+			_, err := guildCollection.UpdateOne(ctx, filter, update)
+
+			if err != nil {
+				c.JSON(401, gin.H{"error": "cannot update the user info"})
+				return
+			}
+
+			c.JSON(200, gin.H{"code": 200, "guild": guildRes.InsertedID, "channel": channelID})
+
+		}
+
+	} else {
+		c.JSON(401, gin.H{"error": "cannot generate a guild"})
+
+	}
+
 }
 
 func joinGuild(c *gin.Context) {
@@ -164,5 +161,24 @@ func joinGuild(c *gin.Context) {
 	insertGuild(user["_id"], guildID)
 
 	c.JSON(200, gin.H{"code": 200, "guild": guildID})
+
+}
+
+func guildInfo(guild interface{}) (bson.M, error) {
+
+	if guildID, ok := guild.(primitive.ObjectID); ok {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		var guild bson.M
+		guildCollection := ConnectDB("guild")
+		err := guildCollection.FindOne(ctx, bson.M{"_id": guildID}).Decode(&guild)
+		handleError(err)
+
+		return guild, nil
+
+	}
+
+	return bson.M{}, errors.New("wrong type")
 
 }

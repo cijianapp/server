@@ -7,9 +7,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 
 	"fmt"
-	"log"
 	"strings"
 	"time"
 )
@@ -17,24 +17,23 @@ import (
 type postPost struct {
 	Title   string        `form:"title" json:"title" `
 	Guild   string        `form:"guild" json:"guild" binding:"required"`
+	Channel string        `form:"channel" json:"channel" binding:"required"`
 	Content []interface{} `form:"content" json:"content" binding:"required"`
 }
 
 type post struct {
-	Title       string      `form:"title" json:"title"`
-	Content     interface{} `form:"content" json:"content"`
-	Owner       interface{} `form:"owner" json:"owner"`
-	OwnerName   interface{} `form:"ownername" json:"ownername"`
-	OwnerAvatar interface{} `form:"owneravatar" json:"owneravatar"`
-	Guild       string      `form:"guild" json:"guild"`
-	GuildName   interface{} `form:"guildname" json:"guildname"`
-	GuildAvatar interface{} `form:"guildavatar" json:"guildavatar"`
-	Time        time.Time   `form:"time" json:"time"`
-	Vote        int64       `form:"vote" json:"vote"`
+	Title   string             `form:"title" json:"title"`
+	Content interface{}        `form:"content" json:"content"`
+	Owner   interface{}        `form:"owner" json:"owner"`
+	Guild   primitive.ObjectID `form:"guild" json:"guild"`
+	Channel primitive.ObjectID `form:"channel" json:"channel" binding:"required"`
+	Time    time.Time          `form:"time" json:"time"`
+	Vote    int64              `form:"vote" json:"vote"`
 }
 
 type getPostsType struct {
-	Guild string `form:"guild" json:"guild" binding:"required"`
+	Guild   string `form:"guild" json:"guild" binding:"required"`
+	Channel string `form:"channel" json:"channel" binding:"required"`
 }
 
 type getPostType struct {
@@ -54,7 +53,8 @@ func newPost(c *gin.Context) {
 
 	var postVals post
 	postVals.Title = postPostVals.Title
-	postVals.Guild = postPostVals.Guild
+	postVals.Guild, _ = primitive.ObjectIDFromHex(postPostVals.Guild)
+	postVals.Channel, _ = primitive.ObjectIDFromHex(postPostVals.Channel)
 
 	var content []interface{}
 
@@ -72,7 +72,25 @@ func newPost(c *gin.Context) {
 			}
 		}
 
-		content = append(content, element)
+		fmt.Println(element)
+
+		if element["type"] == "paragraph" {
+
+			children, ok := element["children"].([]interface{})
+
+			if ok {
+
+				text, ok := children[0].(map[string]interface{})
+				if ok {
+					if text["text"] != "" {
+						content = append(content, element)
+					}
+				}
+
+			}
+		} else {
+			content = append(content, element)
+		}
 
 	}
 	postVals.Content = content
@@ -85,25 +103,6 @@ func newPost(c *gin.Context) {
 	err := userCollection.FindOne(ctx, bson.M{"tel": claims[identityKey]}).Decode(&user)
 	handleError(err)
 	postVals.Owner = user["_id"]
-	postVals.OwnerName = user["username"]
-	postVals.OwnerAvatar = ""
-
-	guildsCollection := ConnectDB("guilds")
-	var guild bson.M
-
-	guildID, err := primitive.ObjectIDFromHex(postVals.Guild)
-	handleError(err)
-
-	err = guildsCollection.FindOne(ctx, bson.M{"_id": guildID}).Decode(&guild)
-	handleError(err)
-	postVals.GuildName = guild["name"]
-	if guild["isavatar"] == true {
-		postVals.GuildAvatar = guild["avatar"]
-	} else {
-		postVals.GuildAvatar = ""
-	}
-
-	log.Println(guild)
 
 	postVals.Time = time.Now()
 	postVals.Vote = 0
@@ -132,11 +131,13 @@ func getPost(c *gin.Context) {
 	postID, err := primitive.ObjectIDFromHex(getPostVals.Post)
 	handleError(err)
 
-	var result bson.M
-	err = postCollection.FindOne(ctx, bson.M{"_id": postID}).Decode(&result)
+	var post bson.M
+	err = postCollection.FindOne(ctx, bson.M{"_id": postID}).Decode(&post)
 	handleError(err)
 
-	c.JSON(200, result)
+	post = completePost(post)
+
+	c.JSON(200, post)
 }
 
 func getPosts(c *gin.Context) {
@@ -148,26 +149,72 @@ func getPosts(c *gin.Context) {
 		c.JSON(401, gin.H{"error": "cannot get the posts"})
 		return
 	}
-
-	postCollection := ConnectDB("post")
-
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	cur, err := postCollection.Find(ctx, bson.M{"guild": getPostsVals.Guild})
+	guildCollection := ConnectDB("guild")
+
+	guildID, err := primitive.ObjectIDFromHex(getPostsVals.Guild)
+	if err != nil {
+		c.JSON(401, gin.H{"error": "cannot get the posts"})
+		return
+	}
+
+	var guild bson.M
+	err = guildCollection.FindOne(ctx, bson.M{"_id": guildID}).Decode(&guild)
+
+	postCollection := ConnectDB("post")
+
+	channelID, err := primitive.ObjectIDFromHex(getPostsVals.Channel)
+	if err != nil {
+		c.JSON(401, gin.H{"error": "cannot get the posts"})
+		return
+	}
+
+	var cur *mongo.Cursor
+
+	if guild["postchannel"] == channelID {
+		cur, err = postCollection.Find(ctx, bson.M{"guild": guildID})
+
+	} else {
+		cur, err = postCollection.Find(ctx, bson.M{"channel": channelID})
+	}
+
 	handleError(err)
 
 	var results []bson.M
 	for cur.Next(ctx) {
-		var result bson.M
-		err := cur.Decode(&result)
+		var post bson.M
+		err := cur.Decode(&post)
 		handleError(err)
 
-		results = append(results, result)
+		post = completePost(post)
+
+		results = append(results, post)
 	}
 	if err := cur.Err(); err != nil {
 		handleError(err)
 	}
 
 	c.JSON(200, results)
+}
+
+func completePost(post bson.M) bson.M {
+	guild, err := guildInfo(post["guild"])
+	if err == nil {
+		post["guildname"] = guild["name"]
+	}
+
+	channel, err := channelInfo(post["channel"])
+	if err == nil {
+		post["channelname"] = channel["name"]
+	}
+
+	user, err := userInfo1(post["owner"])
+	if err == nil {
+		post["username"] = user["username"]
+		post["useravatar"] = user["avatar"]
+	}
+
+	return post
 }
