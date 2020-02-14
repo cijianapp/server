@@ -1,7 +1,7 @@
 package api
 
 import (
-	"github.com/appleboy/gin-jwt/v2"
+	jwt "github.com/appleboy/gin-jwt/v2"
 	"github.com/cijianapp/server/oss"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
@@ -59,6 +59,8 @@ func insertGuild(owner interface{}, guildID primitive.ObjectID) {
 		update = bson.M{"$push": bson.M{"members": bson.M{"_id": user["_id"], "username": user["username"]}}}
 		_, err = guildCollection.UpdateOne(ctx, filter, update)
 		handleError(err)
+
+		updateMemberCount(guildID)
 	}
 
 }
@@ -180,5 +182,26 @@ func guildInfo(guild interface{}) (bson.M, error) {
 	}
 
 	return bson.M{}, errors.New("wrong type")
+
+}
+
+// update the memberCount in a guild
+func updateMemberCount(guildID primitive.ObjectID) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	guildCollection := ConnectDB("guild")
+	filter := bson.M{"_id": guildID}
+
+	var guild bson.M
+	err := guildCollection.FindOne(ctx, filter).Decode(&guild)
+	handleError(err)
+
+	if guildMembers, ok := guild["members"].(bson.A); ok {
+		memberCount := len(guildMembers)
+		update := bson.M{"$set": bson.M{"membercount": memberCount}}
+		_, err = guildCollection.UpdateOne(ctx, filter, update)
+		handleError(err)
+	}
 
 }

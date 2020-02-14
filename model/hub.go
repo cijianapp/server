@@ -52,6 +52,13 @@ func (h *Hub) Run() {
 				messageBytes, err := json.Marshal(message.Data)
 				handleError(err)
 
+				select {
+				case client.send <- messageBytes:
+				default:
+					close(client.send)
+					delete(h.clients, client)
+				}
+
 				if message.Data["channel"] == "a" {
 					select {
 					case client.send <- messageBytes:

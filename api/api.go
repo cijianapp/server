@@ -1,7 +1,7 @@
 package api
 
 import (
-	"github.com/appleboy/gin-jwt/v2"
+	jwt "github.com/appleboy/gin-jwt/v2"
 	"github.com/cijianapp/server/model"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -82,6 +82,7 @@ func setupRouter() *gin.Engine {
 		api.POST("/upload", newUpload)
 		api.POST("/channel", newChannel)
 		api.POST("/vote", vote)
+		api.GET("/explore", explore)
 	}
 
 	upload := r.Group("/upload")
