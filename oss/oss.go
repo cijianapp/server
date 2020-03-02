@@ -30,7 +30,7 @@ func PutObject(icon string) (bool, string) {
 }
 
 // PutImageResize upload all files to aliyun oss after resize and crops
-func PutImageResize(icon string) (bool, string) {
+func PutImageResize(icon string, imageType string) (bool, string) {
 	objectName, iconString := objectNameAndData(icon)
 	if objectName == "" {
 		return false, objectName
@@ -42,7 +42,15 @@ func PutImageResize(icon string) (bool, string) {
 
 	m, _, err := image.Decode(reader)
 
-	dst := tesat(m)
+	dst := m
+
+	if imageType == "avatar" {
+		dst = resizeAvatar(m)
+	}
+
+	if imageType == "cover" {
+		dst = resizeCover(m)
+	}
 
 	buff := new(bytes.Buffer)
 	err = png.Encode(buff, dst)
@@ -76,9 +84,21 @@ func GetObject() {
 	}
 }
 
-func tesat(src image.Image) image.Image {
+func resizeAvatar(src image.Image) image.Image {
 	g := gift.New(
-		gift.ResizeToFill(128, 128, gift.NearestNeighborResampling, gift.CenterAnchor),
+		gift.ResizeToFill(512, 512, gift.NearestNeighborResampling, gift.CenterAnchor),
+	)
+
+	dst := image.NewRGBA(g.Bounds(src.Bounds()))
+
+	g.Draw(dst, src)
+
+	return dst
+}
+
+func resizeCover(src image.Image) image.Image {
+	g := gift.New(
+		gift.ResizeToFill(1920, 1440, gift.NearestNeighborResampling, gift.CenterAnchor),
 	)
 
 	dst := image.NewRGBA(g.Bounds(src.Bounds()))

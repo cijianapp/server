@@ -75,14 +75,27 @@ func setupRouter() *gin.Engine {
 		api.POST("/updateuser", updateUser)
 		api.GET("/info", userInfo)
 		api.POST("/guild", newGuild)
+		api.POST("/updateguild", updateGuild)
 		api.POST("/join", joinGuild)
 		api.POST("/post", newPost)
+		api.POST("/deletepost", deletePost)
 		api.GET("/posts", getPosts)
 		api.GET("/post", getPost)
+		api.GET("/homeposts", getHomePosts)
 		api.POST("/upload", newUpload)
 		api.POST("/channel", newChannel)
 		api.POST("/vote", vote)
 		api.GET("/explore", explore)
+	}
+
+	guest := r.Group("/guest")
+	{
+		guest.GET("/explore", explore)
+		guest.GET("/homeposts", guestPosts)
+		guest.GET("/posts", getPosts)
+		guest.GET("/post", getPost)
+		guest.GET("/guild", getGuild)
+
 	}
 
 	upload := r.Group("/upload")

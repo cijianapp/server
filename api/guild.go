@@ -18,6 +18,10 @@ type postGuild struct {
 	Icon    string `form:"icon" json:"icon"`
 }
 
+type getGuildType struct {
+	ID string `form:"id" json:"id" binding:"required"`
+}
+
 type joinGuildType struct {
 	Guild string `form:"guild" json:"guild" binding:"required"`
 }
@@ -29,6 +33,14 @@ type guild struct {
 	Privacy     bool               `form:"privacy" json:"privacy"`
 	Owner       interface{}        `form:"owner" json:"owner"`
 	PostChannel primitive.ObjectID `form:"postchannel" json:"postchannel"`
+}
+
+type postUpdateGuild struct {
+	ID          string `form:"id" json:"id" binding:"required"`
+	Name        string `form:"name" json:"name" binding:"required"`
+	Avatar      string `form:"avatar" json:"avatar"`
+	Cover       string `form:"cover" json:"cover"`
+	Description string `form:"description" json:"description"`
 }
 
 // When user generate a guild, this function tell user register this guild
@@ -46,7 +58,7 @@ func insertGuild(owner interface{}, guildID primitive.ObjectID) {
 
 	if err != nil {
 		filter = bson.M{"_id": owner}
-		update := bson.M{"$push": bson.M{"guild": guildID}}
+		update := bson.M{"$addToSet": bson.M{"guild": guildID}}
 
 		_, err = userCollection.UpdateOne(ctx, filter, update)
 		handleError(err)
@@ -56,7 +68,7 @@ func insertGuild(owner interface{}, guildID primitive.ObjectID) {
 		handleError(err)
 
 		filter = bson.M{"_id": guildID}
-		update = bson.M{"$push": bson.M{"members": bson.M{"_id": user["_id"], "username": user["username"]}}}
+		update = bson.M{"$addToSet": bson.M{"members": bson.M{"_id": user["_id"], "username": user["username"]}}}
 		_, err = guildCollection.UpdateOne(ctx, filter, update)
 		handleError(err)
 
@@ -96,7 +108,7 @@ func newGuild(c *gin.Context) {
 
 	guildVals.Owner = user["_id"]
 
-	guildVals.Isavatar, guildVals.Avatar = oss.PutImageResize(postGuildVals.Icon)
+	guildVals.Isavatar, guildVals.Avatar = oss.PutImageResize(postGuildVals.Icon, "avatar")
 
 	guildCollection := ConnectDB("guild")
 
@@ -204,4 +216,105 @@ func updateMemberCount(guildID primitive.ObjectID) {
 		handleError(err)
 	}
 
+}
+
+// update the guild by guild settings
+func updateGuild(c *gin.Context) {
+
+	var postUpdateGuildVals postUpdateGuild
+
+	if err := c.ShouldBind(&postUpdateGuildVals); err != nil {
+
+		c.JSON(401, gin.H{"error": "cannot update the guild info"})
+		return
+	}
+
+	guildCollection := ConnectDB("guild")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	guildID, err := primitive.ObjectIDFromHex(postUpdateGuildVals.ID)
+	if err != nil {
+		c.JSON(401, gin.H{"error": "cannot update the guild info"})
+		return
+	}
+
+	filter := bson.M{"_id": guildID}
+
+	update := bson.M{"$set": bson.M{"name": postUpdateGuildVals.Name, "description": postUpdateGuildVals.Description}}
+	_, err = guildCollection.UpdateOne(ctx, filter, update)
+
+	if err != nil {
+		c.JSON(401, gin.H{"error": "cannot update the user info"})
+		return
+	}
+
+	if postUpdateGuildVals.Avatar != "" {
+
+		if postUpdateGuildVals.Avatar == "remove" {
+			Isavatar, Avatar := false, ""
+
+			update := bson.M{"$set": bson.M{"avatar": Avatar, "isavatar": Isavatar}}
+
+			_, err := guildCollection.UpdateOne(ctx, filter, update)
+
+			if err != nil {
+				c.JSON(401, gin.H{"error": "cannot update the guild info"})
+				return
+			}
+
+		} else {
+			Isavatar, Avatar := oss.PutImageResize(postUpdateGuildVals.Avatar, "avatar")
+
+			update := bson.M{"$set": bson.M{"avatar": Avatar, "isavatar": Isavatar}}
+
+			_, err := guildCollection.UpdateOne(ctx, filter, update)
+
+			if err != nil {
+				c.JSON(401, gin.H{"error": "cannot update the user info"})
+				return
+			}
+		}
+
+	}
+
+	if postUpdateGuildVals.Cover != "" {
+		isCover, Cover := oss.PutImageResize(postUpdateGuildVals.Cover, "cover")
+
+		update := bson.M{"$set": bson.M{"cover": Cover, "iscover": isCover}}
+
+		_, err := guildCollection.UpdateOne(ctx, filter, update)
+
+		if err != nil {
+			c.JSON(401, gin.H{"error": "cannot update the user info"})
+			return
+		}
+
+	}
+
+	c.JSON(200, gin.H{"code": 200})
+}
+
+func getGuild(c *gin.Context) {
+	var getGuildVals getGuildType
+
+	if err := c.ShouldBind(&getGuildVals); err != nil {
+		c.JSON(401, gin.H{"error": "cannot get the guild"})
+		return
+	}
+
+	guildCollection := ConnectDB("guild")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	guildID, err := primitive.ObjectIDFromHex(getGuildVals.ID)
+	handleError(err)
+
+	var guild bson.M
+	err = guildCollection.FindOne(ctx, bson.M{"_id": guildID}).Decode(&guild)
+	handleError(err)
+
+	c.JSON(200, guild)
 }

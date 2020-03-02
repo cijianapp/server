@@ -1,13 +1,13 @@
 package api
 
 import (
-	"context"
-	"github.com/appleboy/gin-jwt/v2"
+	jwt "github.com/appleboy/gin-jwt/v2"
 	"github.com/cijianapp/server/oss"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
+	"context"
 	"errors"
 	"time"
 )
@@ -79,7 +79,7 @@ func updateUser(c *gin.Context) {
 			}
 
 		} else {
-			Isavatar, Avatar := oss.PutImageResize(postUpdateUserVals.Icon)
+			Isavatar, Avatar := oss.PutImageResize(postUpdateUserVals.Icon, "avatar")
 
 			update := bson.M{"$set": bson.M{"avatar": Avatar, "isavatar": Isavatar, "username": postUpdateUserVals.Username}}
 

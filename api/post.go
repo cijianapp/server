@@ -2,12 +2,14 @@ package api
 
 import (
 	"context"
-	"github.com/appleboy/gin-jwt/v2"
+
+	jwt "github.com/appleboy/gin-jwt/v2"
 	"github.com/cijianapp/server/oss"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"fmt"
 	"strings"
@@ -37,6 +39,10 @@ type getPostsType struct {
 }
 
 type getPostType struct {
+	Post string `form:"post" json:"post" binding:"required"`
+}
+
+type deletePostType struct {
 	Post string `form:"post" json:"post" binding:"required"`
 }
 
@@ -199,6 +205,74 @@ func getPosts(c *gin.Context) {
 	c.JSON(200, results)
 }
 
+func getHomePosts(c *gin.Context) {
+
+	claims := jwt.ExtractClaims(c)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	userCollection := ConnectDB("user")
+
+	var user bson.M
+	err := userCollection.FindOne(ctx, bson.M{"tel": claims[identityKey]}).Decode(&user)
+	handleError(err)
+
+	postCollection := ConnectDB("post")
+
+	var cur *mongo.Cursor
+	cur, err = postCollection.Find(ctx, bson.M{"guild": bson.M{"$in": user["guild"]}})
+	handleError(err)
+
+	var results []bson.M
+	for cur.Next(ctx) {
+		var post bson.M
+		err := cur.Decode(&post)
+		handleError(err)
+
+		post = completePost(post)
+
+		results = append(results, post)
+	}
+	if err := cur.Err(); err != nil {
+		handleError(err)
+	}
+
+	c.JSON(200, results)
+}
+
+func guestPosts(c *gin.Context) {
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	postCollection := ConnectDB("post")
+
+	options := options.Find()
+	options.SetSort(bson.M{"vote": -1})
+	options.SetLimit(50)
+
+	var cur *mongo.Cursor
+	cur, err := postCollection.Find(ctx, bson.M{}, options)
+	handleError(err)
+
+	var results []bson.M
+	for cur.Next(ctx) {
+		var post bson.M
+		err := cur.Decode(&post)
+		handleError(err)
+
+		post = completePost(post)
+
+		results = append(results, post)
+	}
+	if err := cur.Err(); err != nil {
+		handleError(err)
+	}
+
+	c.JSON(200, results)
+}
+
 func completePost(post bson.M) bson.M {
 	guild, err := guildInfo(post["guild"])
 	if err == nil {
@@ -217,4 +291,26 @@ func completePost(post bson.M) bson.M {
 	}
 
 	return post
+}
+
+func deletePost(c *gin.Context) {
+	var deletePostVals deletePostType
+
+	if err := c.ShouldBind(&deletePostVals); err != nil {
+		c.JSON(401, gin.H{"error": "cannot delete the post"})
+		return
+	}
+
+	postCollection := ConnectDB("post")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	postID, err := primitive.ObjectIDFromHex(deletePostVals.Post)
+	handleError(err)
+
+	deleteResult, err := postCollection.DeleteOne(ctx, bson.M{"_id": postID})
+	handleError(err)
+
+	c.JSON(200, deleteResult)
 }

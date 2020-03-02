@@ -44,12 +44,17 @@ func explore(c *gin.Context) {
 }
 
 func extractGuildInfo(guild bson.M) bson.M {
-	guildInfo := bson.M{
-		"_id":         guild["_id"],
-		"avatar":      guild["avatar"],
-		"isavatar":    guild["isavatar"],
-		"name":        guild["name"],
-		"membercount": guild["membercount"],
-	}
-	return guildInfo
+	// guildInfo := bson.M{
+	// 	"_id":         guild["_id"],
+	// 	"avatar":      guild["avatar"],
+	// 	"isavatar":    guild["isavatar"],
+	// 	"cover":       guild["cover"],
+	// 	"iscover":     guild["iscover"],
+	// 	"name":        guild["name"],
+	// 	"membercount": guild["membercount"],
+	// 	"description": guild["description"],
+	// }
+	// return guildInfo
+
+	return guild
 }
