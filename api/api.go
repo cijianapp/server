@@ -1,10 +1,14 @@
 package api
 
 import (
+	"context"
+
 	jwt "github.com/appleboy/gin-jwt/v2"
 	"github.com/cijianapp/server/model"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"fmt"
 	"log"
@@ -114,8 +118,20 @@ func handleError(err error) {
 	}
 }
 
+var client *mongo.Client
+
 // Run is the root fucntion to excute
 func Run() {
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var err error
+	client, err = mongo.Connect(ctx, options.Client().ApplyURI("mongodb://localhost:27017"))
+
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	r := setupRouter()
 

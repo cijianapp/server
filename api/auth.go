@@ -2,12 +2,13 @@ package api
 
 import (
 	"context"
-	"github.com/appleboy/gin-jwt/v2"
-	"github.com/gin-gonic/gin"
-	"go.mongodb.org/mongo-driver/bson"
 	"log"
 	"net/http"
 	"time"
+
+	jwt "github.com/appleboy/gin-jwt/v2"
+	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 type login struct {
